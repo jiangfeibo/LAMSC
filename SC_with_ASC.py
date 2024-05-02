@@ -20,18 +20,19 @@ imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
 torch.cuda.set_device(0)
 class params():
-    checkpoint_path = "checkpoints"
+    checkpoint_path = "checkpoints" # save to model weights
     device = "cuda"
-    dataset = "../datasets/val2017_seg"
-    log_path = "logs"
-    epoch = 100
-    lr = 1e-3
+    dataset = "" # path to dataset
+    log_path = "logs" # path to logs
+    epoch = 100 # training epoch
+    lr = 1e-3 # learning rate
     batchsize = 128
-    snr = 25
+    snr = 25 # SNR setting
     weight_delay = 1e-6
-    use_ASC = True
-    save_model_name = "LAM-SC"
+    use_ASC = True # using ASC or not
+    save_model_name = "LAM-SC" # name of the save model weights
 
+# fix random seed
 def same_seeds(seed):
     # Python built-in random module
     random.seed(seed)
@@ -45,10 +46,12 @@ def same_seeds(seed):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
 
+# show the constructed images
 def show_images(pred_images, filename):
     imgs_sample = (pred_images.data + 1) / 2.0
     torchvision.utils.save_image(imgs_sample, filename, nrow=10)
 
+# construction of dataset
 class custom_datasets(Dataset):
     def __init__(self, data):
         self.data = data.imgs
@@ -70,8 +73,9 @@ class custom_datasets(Dataset):
         ]
         return transforms.Compose(compose)
 
+# SC model training
 def train_SCNet(model, train_dataloader, arg:params):
-    # laod weights
+    # load model
     weights_path = os.path.join(arg.checkpoint_path,f"{arg.save_model_name}_snr{arg.snr}.pth")
     model = model.to(arg.device)
     muInfoNet = MutualInfoSystem()
@@ -103,15 +107,15 @@ def train_SCNet(model, train_dataloader, arg:params):
             optimizer_SC.zero_grad()
             x = x.to(arg.device)
             c_code, c_code_, s_code, s_code_, im_decoding = model(x)
+            loss_SC = mse(im_decoding, x)
             # Optional: use MI to maximize the achieved data rate during training.
-            batch_joint = sample_batch(1, 'joint', c_code, c_code_).to(arg.device)
-            batch_marginal = sample_batch(1, 'marginal', c_code, c_code_).to(arg.device)
-            t = muInfoNet(batch_joint)
-            et = torch.exp(muInfoNet(batch_marginal))
-            loss_MI = torch.mean(t) - torch.log(torch.mean(et))
+            # batch_joint = sample_batch(1, 'joint', c_code, c_code_).to(arg.device)
+            # batch_marginal = sample_batch(1, 'marginal', c_code, c_code_).to(arg.device)
+            # t = muInfoNet(batch_joint)
+            # et = torch.exp(muInfoNet(batch_marginal))
+            # loss_MI = torch.mean(t) - torch.log(torch.mean(et))
             # compute SC loss
-            loss_SC = mse(im_decoding,x)
-            loss_SC = loss_MI + loss_SC
+            # loss_SC = loss_SC + loss_MI
             loss_SC.backward()
             optimizer_SC.step()
             losses.append(loss_SC.item())
@@ -120,20 +124,20 @@ def train_SCNet(model, train_dataloader, arg:params):
         print(f"epoch {epoch} | loss: {losses} | waste time: {time.time() - start}")
         if epoch%5==0:
             os.makedirs(os.path.join(arg.log_path, f"{arg.snr}"),exist_ok=True)
+            # show raw and constructed images
             show_images(x.detach().cpu(), os.path.join(arg.log_path, f"{arg.snr}",f"{arg.save_model_name}_imgs.jpg"))
             show_images(im_decoding.detach().cpu(), os.path.join(arg.log_path, f"{arg.snr}",f"{arg.save_model_name}_rec_imgs.jpg"))
         with open(os.path.join(arg.log_path,f"{arg.save_model_name}_snr{arg.snr}_loss.json"),"w",encoding="utf-8")as f:
             f.write(json.dumps(loss_record,indent=4,ensure_ascii=False))
+        # save weights
         torch.save(model.state_dict(), weights_path)
 
+# training mask network
 def train_MASKNet(model, train_dataloader, arg:params):
     # laod weights
     weights_path = os.path.join(arg.checkpoint_path, f"{arg.save_model_name}_snr{arg.snr}.pth")
     weights = torch.load(weights_path, map_location="cpu")
     model.load_state_dict(weights)
-    muInfoNet = MutualInfoSystem()
-    muInfoNet.load_state_dict(torch.load(os.path.join(arg.checkpoint_path, "MI.pth"), map_location="cpu"))
-    muInfoNet.to(arg.device)
     model = model.to(arg.device)
     # Train the MASKNet and frozen the SCNet
     for param in model.parameters():
@@ -158,15 +162,9 @@ def train_MASKNet(model, train_dataloader, arg:params):
             x = x.to(arg.device)
             c_code, c_code_, s_code, s_code_, im_decoding = model(x)
             loss_ch = mse(s_code, s_code_)
-            # Optional: use MI to maximize the achieved data rate during training.
-            batch_joint = sample_batch(1, 'joint', c_code, c_code_).to(arg.device)
-            batch_marginal = sample_batch(1, 'marginal', c_code, c_code_).to(arg.device)
-            t = muInfoNet(batch_joint)
-            et = torch.exp(muInfoNet(batch_marginal))
-            loss_MI = torch.mean(t) - torch.log(torch.mean(et))
             # compute SC loss
             loss_SC = mse(im_decoding, x)
-            loss = loss_MI + loss_SC + loss_ch
+            loss = loss_SC + loss_ch
             loss.backward()
             optimizer.step()
             scheduler.step(loss)
@@ -177,20 +175,23 @@ def train_MASKNet(model, train_dataloader, arg:params):
             f"epoch {epoch} | loss: {loss.item()} | waste time: {time.time() - start}")
         if epoch % 5 == 0:
             os.makedirs(os.path.join(arg.log_path, f"{arg.snr}"), exist_ok=True)
+            # show raw and constructed images
             show_images(x.detach().cpu(), os.path.join(arg.log_path, f"{arg.snr}", f"{arg.save_model_name}_imgs.jpg"))
             show_images(im_decoding.detach().cpu(), os.path.join(arg.log_path, f"{arg.snr}", f"{arg.save_model_name}_rec_imgs.jpg"))
         with open(os.path.join(arg.log_path, f"{arg.save_model_name}_snr{arg.snr}_loss.json"), "w", encoding="utf-8") as f:
             f.write(json.dumps(loss_record, indent=4, ensure_ascii=False))
+        # save weights
         weights_path = os.path.join(arg.checkpoint_path, f"{arg.save_model_name}_snr{arg.snr}.pth")
         torch.save(model.state_dict(), weights_path)
 
+# data transmission based on SC model
 @torch.no_grad()
 def data_transmission(img_path):
     Img_data = dset.ImageFolder(root=img_path)
     datasets = custom_datasets(Img_data)
     dataloader = DataLoader(dataset=datasets, batch_size=1, shuffle=False, num_workers=0,
                                   drop_last=False)
-    # training SCNet
+    # load SC model
     SC_model = SCNet(input_dim=3, ASC=False)
     channel_model = channel_net(in_dims=5408, snr=arg.snr)
     model = base_net(SC_model, channel_model)
@@ -211,7 +212,7 @@ if __name__ == '__main__':
     datasets = custom_datasets(Img_data)
     train_dataloader = DataLoader(dataset=datasets, batch_size=arg.batchsize, shuffle=True, num_workers=0,
                                   drop_last=False)
-    # training SCNet
+    # training SC model
     SC_model = SCNet(input_dim=3, ASC=False)
     channel_model = channel_net(in_dims=5408, snr=arg.snr)
     model = base_net(SC_model, channel_model)

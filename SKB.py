@@ -8,15 +8,7 @@ import sys
 sys.path.append("../..")
 from segment_anything import sam_model_registry, SamPredictor, SamAutomaticMaskGenerator
 
-def show_mask(mask, ax, random_color=False):
-    if random_color:
-        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
-    else:
-        color = np.array([30 / 255, 144 / 255, 255 / 255, 0.6])
-    h, w = mask.shape[-2:]
-    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
-    ax.imshow(mask_image)
-
+# generate a single image segment with a mask from SAM
 def show_interesting_object(mask, image, ax):
     h, w = mask.shape[-2:]
     mask_image = mask.reshape(h, w, 1)*image
@@ -39,6 +31,7 @@ def show_box(box, ax):
     w, h = box[2] - box[0], box[3] - box[1]
     ax.add_patch(plt.Rectangle((x0, y0), w, h, edgecolor='green', facecolor=(0, 0, 0, 0), lw=2))
 
+# implement semantic segmentation with human prompts
 def SKB_with_human(image_path):
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -55,6 +48,7 @@ def SKB_with_human(image_path):
     plt.imshow(image)
     count = 1
     while True:
+        # select the interesting segments by input the coordinates of interesting objects.
         select_points = input("Enter the coordinate values in sequence, separated by spaces:")
         if select_points == "":
             break
@@ -63,8 +57,8 @@ def SKB_with_human(image_path):
         print(select_points)
 
         input_label = np.array([1 for i in range(select_points.shape[0])])
-        print(input_label)
 
+        # generate masks using SAM according input coordinates
         masks, _, _ = predictor.predict(
             point_coords=select_points,
             point_labels=input_label,
@@ -73,15 +67,15 @@ def SKB_with_human(image_path):
 
         plt.figure(figsize=(10,10))
         show_interesting_object(masks,image,plt.gca())
-        # show_mask(masks, plt.gca())
-        # show_points(input_point, input_label, plt.gca())
         plt.axis('off')
         plt.savefig(f"res_{count}.png",bbox_inches='tight', pad_inches=0)
         plt.show()
         count += 1
 
+# automatically implement semantic segmentation
 def SKB_with_auto(image_path):
     image = cv2.imread(image_path)
+    # load SAM
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     sam.to(device="cuda")
     mask_generator = SamAutomaticMaskGenerator(model=sam,
@@ -94,8 +88,10 @@ def SKB_with_auto(image_path):
                                                min_mask_region_area=100,
                                                )
 
+    # generate masks using SAM automatically
     masks = mask_generator.generate(image)
     plt.figure(figsize=(10, 10))
+    # obtain image segments
     for i,mask in enumerate(masks):
         show_interesting_object(mask['segmentation'], image, plt.gca())
         plt.axis('off')

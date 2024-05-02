@@ -15,6 +15,7 @@ def AWGN_channel(x, snr):  # used to simulate additive white gaussian noise chan
 class channel_net(nn.Module):
     def __init__(self, in_dims=800, mid_dims=128, snr=25):
         super(channel_net, self).__init__()
+        # use linear as the channel encoder and decoder
         self.enc_fc = nn.Linear(in_dims, mid_dims)
         self.dec_fc = nn.Linear(mid_dims, in_dims)
         self.snr = snr
@@ -25,6 +26,7 @@ class channel_net(nn.Module):
         x = self.dec_fc(ch_code_with_n)
         return ch_code,ch_code_with_n,x
 
+# Definition of MutualInfoSystem, from https://github.com/Azul-9/DeepLearningEnabledSemanticCommunicationSystems.git
 class MutualInfoSystem(nn.Module):  # mutual information used to maximize channel capacity
     def __init__(self):
         super(MutualInfoSystem, self).__init__()

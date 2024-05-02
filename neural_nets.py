@@ -7,6 +7,7 @@ from torchsummary import summary
 import numpy as np
 from torch.autograd import Variable
 
+# definition of SC model with ASC
 class SCNet(nn.Module):
     def __init__(self,input_dim=3, ASC=False):
         super(SCNet, self).__init__()
@@ -14,7 +15,7 @@ class SCNet(nn.Module):
         self.pool = nn.MaxPool2d((2, 2),return_indices=True)
         self.conv2 = nn.Conv2d(128, 32, kernel_size=5,bias=False)
         self.use_ASC = ASC
-        self.Mask = MaskNet(32)
+        self.Mask = MaskNet(32) # mask network
         self.convt1= nn.ConvTranspose2d(32, 128, kernel_size=5)
         self.convt2 = nn.ConvTranspose2d(128, input_dim, kernel_size=5)
         self.uppool = nn.MaxUnpool2d(2, 2)
@@ -26,7 +27,7 @@ class SCNet(nn.Module):
             x = F.leaky_relu(self.conv2(x))
             x, self.indices2 = self.pool(x)
             self.x_shape = x.shape
-            if self.use_ASC:
+            if self.use_ASC: # using masknet to mask semantics
                 x = self.Mask(x)
             latent = x.view(x.size(0), -1)
             return latent
@@ -38,6 +39,7 @@ class SCNet(nn.Module):
             x = F.tanh(self.convt2(x))
             return x
 
+# definition of the mask network
 class MaskNet(nn.Module):
     def __init__(self,input_dim=32):
         super(MaskNet, self).__init__()
@@ -54,10 +56,10 @@ class MaskNet(nn.Module):
         # print(x.shape)
         # index = torch.where(x!=0)
         # retain_x = x[index]
-        # print("压缩语义bit:", retain_x.element_size() * retain_x.nelement())
-
+        # print("compression bit:", retain_x.element_size() * retain_x.nelement())
         return x
 
+# definition of the channel network in ASI
 class ChannelAttention(nn.Module):
     def __init__(self, in_dims):
         super(ChannelAttention, self).__init__()
@@ -74,6 +76,7 @@ class ChannelAttention(nn.Module):
         out = avg_out + max_out
         return self.sigmoid(out)
 
+# definition of the spatial network in ASI
 class SpatialAttention(nn.Module):
     def __init__(self, kernel_size=7):
         super(SpatialAttention, self).__init__()
@@ -87,6 +90,7 @@ class SpatialAttention(nn.Module):
         x = self.conv(x)
         return self.sigmoid(x)
 
+# definition of the attention network in ASI
 class AttentionNet(nn.Module):
     def __init__(self, in_dims=3*3, kernel_size=7):
         super(AttentionNet, self).__init__()
@@ -94,7 +98,6 @@ class AttentionNet(nn.Module):
         self.sa = SpatialAttention(kernel_size)
         self.out1 = nn.Linear(36864,128)
         self.out2 = nn.Linear(128,3)
-
 
     def forward(self, x):
         x = x * self.ca(x)

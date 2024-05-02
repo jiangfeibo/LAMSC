@@ -16,14 +16,15 @@ imagenet_mean = np.array([0.485, 0.456, 0.406])
 imagenet_std = np.array([0.229, 0.224, 0.225])
 
 class params():
-    checkpoint_path = "checkpoints"
+    checkpoint_path = "checkpoints" # path to save model weights
     device = "cuda"
-    dataset = r"D:\PythonProj\sd_server\datasets\VOC2012_seg2\VOC2012"
-    log_path = "logs"
-    epoch = 100
-    lr = 1e-3
+    dataset = r"" # path to training data
+    log_path = "logs" # path to save logs
+    epoch = 100 # training epochs
+    lr = 1e-3 # learning rate
     batchsize = 128
 
+# construction training dataset
 class train_datasets(Dataset):
     def __init__(self, dataset_path):
         self.seg_imgs_path = [os.path.join(dataset_path,seg_imgs) for seg_imgs in os.listdir(dataset_path)]
@@ -55,6 +56,7 @@ class train_datasets(Dataset):
         ]
         return transforms.Compose(compose)
 
+# construction test dataset
 class test_datasets(Dataset):
     def __init__(self, dataset_path):
         self.seg_imgs_path = [os.path.join(dataset_path,seg_imgs) for seg_imgs in os.listdir(dataset_path)]
@@ -84,15 +86,19 @@ class test_datasets(Dataset):
         ]
         return transforms.Compose(compose)
 
+# Training of the attention network
 def Train_AttentionNet(data_path):
+    # load dataset
     datasets = train_datasets(data_path)
     train_dataloader = DataLoader(dataset=datasets, batch_size=arg.batchsize, shuffle=True, num_workers=0,
                                   drop_last=False)
+    # load model
     model = AttentionNet(3*3)
     model.to(arg.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=arg.lr,weight_decay=1e-5)
     mse = nn.MSELoss()
     model.train()
+    # model training
     for epoch in range(arg.epoch):
         losses = []
         acces = []
@@ -113,28 +119,30 @@ def Train_AttentionNet(data_path):
         print(f"epoch-{epoch} Loss: {losses} | Acc: {acces}")
         torch.save(model.state_dict(), os.path.join(arg.checkpoint_path, "AttentionNet.pth"))
 
+# generate semantic-aware images based on the attention network
 @torch.no_grad()
 def semantic_aware_images_generation(data_path):
     datasets = test_datasets(data_path)
     dataloader = DataLoader(dataset=datasets, batch_size=1, shuffle=False, num_workers=0,
                                   drop_last=False)
     model = AttentionNet(3 * 3)
+    # load weights
     model.load_state_dict(torch.load(os.path.join(arg.checkpoint_path,"AttentionNet.pth"),map_location="cpu"))
     model.to(arg.device)
+    # model test
     model.eval()
     for i, (x, y) in enumerate(dataloader):
         x = x.to(arg.device)
         y_ = model(x)
         y_ = torch.squeeze(y_)
         select_img_indexes = torch.argwhere(y_ > 0.5).squeeze().cpu().tolist()
-        if isinstance(select_img_indexes, int):
+        if isinstance(select_img_indexes, int): # if the number of selected segments is 1
             select_imgs = y[select_img_indexes][0]
             semantic_aware_image = Image.open(select_imgs).convert('RGB')
             save_path = os.path.sep.join(select_imgs.split(os.path.sep)[:-1]) + "_aware.jpg"
             semantic_aware_image.save(save_path)
-        else:
+        else: # if the number of selected segments > 1
             select_imgs = [img_path[0] for i, img_path in enumerate(y) if i in select_img_indexes]
-            print(select_imgs)
             semantic_aware_image = Image.open(select_imgs[0]).convert('RGB')
             semantic_aware_image = np.array(semantic_aware_image)
             for i in range(1,len(select_imgs)):
@@ -146,7 +154,6 @@ def semantic_aware_images_generation(data_path):
         print(save_path,"save success!")
 
 if __name__ == '__main__':
-    dataset_path = r"D:\PythonProj\sd_server\datasets\VOC2012_seg2\VOC2012"
     arg = params()
-    Train_AttentionNet(dataset_path)
-    semantic_aware_images_generation(dataset_path)
+    Train_AttentionNet(arg.dataset)
+    semantic_aware_images_generation(arg.dataset)
