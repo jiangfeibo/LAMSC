@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
@@ -35,11 +37,12 @@ def show_box(box, ax):
 def SKB_with_human(image_path):
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    plt.figure(figsize=(10,10))
+    plt.figure()
     plt.imshow(image)
     plt.axis('on')
     plt.show()
-
+    sam_checkpoint = "checkpoints/sam_vit_h_4b8939.pth"
+    model_type = "vit_h"
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
     sam.to(device=device)
 
@@ -73,11 +76,18 @@ def SKB_with_human(image_path):
         count += 1
 
 # automatically implement semantic segmentation
-def SKB_with_auto(image_path):
+def SKB_with_auto(image_path,device="cuda"):
+    save_path = os.path.join("data/segments")
+    img_name = image_path.split(os.path.sep)[-1]
+    seg_dir = os.path.join(save_path, img_name.replace('.jpg', '').replace('.png', ''))
     image = cv2.imread(image_path)
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    max_segment_num = 5 # Number of segments retained
     # load SAM
+    sam_checkpoint = "checkpoints/sam_vit_h_4b8939.pth"
+    model_type = "vit_h"
     sam = sam_model_registry[model_type](checkpoint=sam_checkpoint)
-    sam.to(device="cuda")
+    sam.to(device=device)
     mask_generator = SamAutomaticMaskGenerator(model=sam,
                                                points_per_side=32,
                                                # points_per_batch=64,
@@ -85,23 +95,31 @@ def SKB_with_auto(image_path):
                                                stability_score_thresh=0.92,
                                                crop_n_layers=1,
                                                crop_n_points_downscale_factor=2,
-                                               min_mask_region_area=100,
+                                               min_mask_region_area=400,
                                                )
 
     # generate masks using SAM automatically
     masks = mask_generator.generate(image)
-    plt.figure(figsize=(10, 10))
+    plt.figure()
     # obtain image segments
-    for i,mask in enumerate(masks):
+    os.makedirs(save_path, exist_ok=True)
+    count = 0
+    masks = sorted(masks,key=lambda x:np.sum(x['segmentation']),reverse=True)
+    if len(masks) > max_segment_num:# remove too small segments
+        masks = masks[:max_segment_num]
+    for mask in masks:
         show_interesting_object(mask['segmentation'], image, plt.gca())
         plt.axis('off')
-        plt.savefig(f"{image_path.replace('.jpg','').replace('.png','')}/{str(i).zfill(4)}.jpg", bbox_inches='tight', pad_inches=0)
+        os.makedirs(seg_dir, exist_ok=True)
+        seg_save_path = os.path.join(seg_dir,f"{str(count).zfill(4)}.jpg")
+        print(seg_save_path)
+        plt.savefig(seg_save_path, bbox_inches='tight', pad_inches=0)
+        count += 1
         # plt.show()
 
 if __name__ == '__main__':
-    sam_checkpoint = "sam_vit_h_4b8939.pth"
-    model_type = "vit_h"
-    device = "cuda"
-    image_path = "result.jpg"
-    SKB_with_auto(image_path)
-    SKB_with_human(image_path)
+    device = "cpu"
+    image_path = "data/raw_images"
+    for img in os.listdir(image_path):
+        img_path = os.path.join(image_path,img)
+        SKB_with_auto(img_path,device)

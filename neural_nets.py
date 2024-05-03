@@ -92,12 +92,12 @@ class SpatialAttention(nn.Module):
 
 # definition of the attention network in ASI
 class AttentionNet(nn.Module):
-    def __init__(self, in_dims=3*3, kernel_size=7):
+    def __init__(self, in_dims=5*3, kernel_size=7):
         super(AttentionNet, self).__init__()
         self.ca = ChannelAttention(in_dims)
         self.sa = SpatialAttention(kernel_size)
-        self.out1 = nn.Linear(36864,128)
-        self.out2 = nn.Linear(128,3)
+        self.out1 = nn.Linear(61440,128)
+        self.out2 = nn.Linear(128,in_dims//3)
 
     def forward(self, x):
         x = x * self.ca(x)
@@ -109,12 +109,12 @@ class AttentionNet(nn.Module):
 
 
 if __name__ == '__main__':
-    net = SCNet()
-    net.to("cuda")
-    summary(net,(3,64,64),device="cuda")
+    # net = SCNet()
+    # net.to("cuda")
+    # summary(net,(3,64,64),device="cuda")
 
-    net = AttentionNet()
+    net = AttentionNet(in_dims=5*3)
     net.to("cuda")
-    summary(net, (3*3, 64, 64), device="cuda")
+    summary(net, (15, 64, 64), device="cuda")
 
 

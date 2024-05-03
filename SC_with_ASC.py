@@ -22,12 +22,12 @@ torch.cuda.set_device(0)
 class params():
     checkpoint_path = "checkpoints" # save to model weights
     device = "cuda"
-    dataset = "" # path to dataset
+    dataset = r"D:\PythonProj\sd_server\datasets\VOC2012_seg" # path to dataset
     log_path = "logs" # path to logs
     epoch = 100 # training epoch
-    lr = 1e-3 # learning rate
+    lr = 1e-4 # learning rate
     batchsize = 128
-    snr = 25 # SNR setting
+    snr = 20 # SNR setting
     weight_delay = 1e-6
     use_ASC = True # using ASC or not
     save_model_name = "LAM-SC" # name of the save model weights
@@ -77,13 +77,16 @@ class custom_datasets(Dataset):
 def train_SCNet(model, train_dataloader, arg:params):
     # load model
     weights_path = os.path.join(arg.checkpoint_path,f"{arg.save_model_name}_snr{arg.snr}.pth")
+    weights = torch.load(weights_path, map_location="cpu")
+    model.load_state_dict(weights)
     model = model.to(arg.device)
-    muInfoNet = MutualInfoSystem()
-    muInfoNet.load_state_dict(torch.load(os.path.join(arg.checkpoint_path,"MI.pth"), map_location="cpu"))
-    muInfoNet.to(arg.device)
+    # Optional: use MI to maximize the achieved data rate during training.
+    # muInfoNet = MutualInfoSystem()
+    # muInfoNet.load_state_dict(torch.load(os.path.join(arg.checkpoint_path,"MI.pth"), map_location="cpu"))
+    # muInfoNet.to(arg.device)
     optimizer_SC = torch.optim.Adam(model.isc_model.parameters(), lr=arg.lr,
                                              weight_decay=arg.weight_delay)
-    optimizer_Ch = torch.optim.Adam(model.Ch_model.parameters(), lr=arg.lr,
+    optimizer_Ch = torch.optim.Adam(model.ch_model.parameters(), lr=arg.lr,
                                              weight_decay=arg.weight_delay)
 
     # define loss function
@@ -154,7 +157,7 @@ def train_MASKNet(model, train_dataloader, arg:params):
     mse = nn.MSELoss()
     model.train()
     loss_record = []
-    for epoch in range(30):
+    for epoch in range(10):
         start = time.time()
         losses = []
         for i, (x, y) in enumerate(train_dataloader):
@@ -167,7 +170,7 @@ def train_MASKNet(model, train_dataloader, arg:params):
             loss = loss_SC + loss_ch
             loss.backward()
             optimizer.step()
-            scheduler.step(loss)
+            # scheduler.step(loss)
             losses.append(loss.item())
         losses = np.mean(losses)
         loss_record.append(losses)
@@ -181,7 +184,7 @@ def train_MASKNet(model, train_dataloader, arg:params):
         with open(os.path.join(arg.log_path, f"{arg.save_model_name}_snr{arg.snr}_loss.json"), "w", encoding="utf-8") as f:
             f.write(json.dumps(loss_record, indent=4, ensure_ascii=False))
         # save weights
-        weights_path = os.path.join(arg.checkpoint_path, f"{arg.save_model_name}_snr{arg.snr}.pth")
+        weights_path = os.path.join(arg.checkpoint_path, f"{arg.save_model_name}_snr{arg.snr}1.pth")
         torch.save(model.state_dict(), weights_path)
 
 # data transmission based on SC model
@@ -200,9 +203,12 @@ def data_transmission(img_path):
     model.load_state_dict(weight)
     model.to(arg.device)
     model.eval()
-    for i, (x, y) in enumerate(train_dataloader):
+    save_dir = "data/rec_images"
+    os.makedirs(save_dir,exist_ok=True)
+    for i, (x, y) in enumerate(dataloader):
+        x = x.to(arg.device)
         c_code, c_code_, s_code, s_code_, im_decoding = model(x)
-        show_images(im_decoding.cpu(),f"rec_img_{i}.jpg")
+        show_images(im_decoding.cpu(),os.path.join(save_dir,f"rec_img_{i}.jpg"))
 
 arg = params()
 if __name__ == '__main__':
@@ -223,6 +229,7 @@ if __name__ == '__main__':
     channel_model = channel_net(in_dims=5408, snr=arg.snr)
     model = base_net(SC_model, channel_model)
     train_MASKNet(model, train_dataloader, arg)
+
 
 
 
