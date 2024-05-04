@@ -22,7 +22,7 @@ torch.cuda.set_device(0)
 class params():
     checkpoint_path = "checkpoints" # save to model weights
     device = "cuda"
-    dataset = r"D:\PythonProj\sd_server\datasets\VOC2012_seg" # path to dataset
+    dataset = r"data/semantic-aware_images" # path to dataset
     log_path = "logs" # path to logs
     epoch = 100 # training epoch
     lr = 1e-4 # learning rate
@@ -77,8 +77,6 @@ class custom_datasets(Dataset):
 def train_SCNet(model, train_dataloader, arg:params):
     # load model
     weights_path = os.path.join(arg.checkpoint_path,f"{arg.save_model_name}_snr{arg.snr}.pth")
-    weights = torch.load(weights_path, map_location="cpu")
-    model.load_state_dict(weights)
     model = model.to(arg.device)
     # Optional: use MI to maximize the achieved data rate during training.
     # muInfoNet = MutualInfoSystem()
@@ -170,7 +168,7 @@ def train_MASKNet(model, train_dataloader, arg:params):
             loss = loss_SC + loss_ch
             loss.backward()
             optimizer.step()
-            # scheduler.step(loss)
+            scheduler.step(loss)
             losses.append(loss.item())
         losses = np.mean(losses)
         loss_record.append(losses)
@@ -189,13 +187,13 @@ def train_MASKNet(model, train_dataloader, arg:params):
 
 # data transmission based on SC model
 @torch.no_grad()
-def data_transmission(img_path):
+def data_transmission(img_path,dataset="example"):
     Img_data = dset.ImageFolder(root=img_path)
     datasets = custom_datasets(Img_data)
     dataloader = DataLoader(dataset=datasets, batch_size=1, shuffle=False, num_workers=0,
                                   drop_last=False)
     # load SC model
-    SC_model = SCNet(input_dim=3, ASC=False)
+    SC_model = SCNet(input_dim=3, ASC=True)
     channel_model = channel_net(in_dims=5408, snr=arg.snr)
     model = base_net(SC_model, channel_model)
     weights_path = os.path.join(arg.checkpoint_path, f"{arg.save_model_name}_snr{arg.snr}.pth")
@@ -203,7 +201,7 @@ def data_transmission(img_path):
     model.load_state_dict(weight)
     model.to(arg.device)
     model.eval()
-    save_dir = "data/rec_images"
+    save_dir = f"data/rec_images/{dataset}"
     os.makedirs(save_dir,exist_ok=True)
     for i, (x, y) in enumerate(dataloader):
         x = x.to(arg.device)

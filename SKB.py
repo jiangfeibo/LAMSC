@@ -76,10 +76,10 @@ def SKB_with_human(image_path):
         count += 1
 
 # automatically implement semantic segmentation
-def SKB_with_auto(image_path,device="cuda"):
-    save_path = os.path.join("data/segments")
+def SKB_with_auto(image_path,device="cuda",dataset="example"):
+    save_path = os.path.join(f"data/segments/{dataset}")
     img_name = image_path.split(os.path.sep)[-1]
-    seg_dir = os.path.join(save_path, img_name.replace('.jpg', '').replace('.png', ''))
+    seg_dir = os.path.join(save_path, img_name.lower().replace('.jpg', '').replace('.png', '').replace('.jpeg', ''))
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     max_segment_num = 5 # Number of segments retained
@@ -100,14 +100,15 @@ def SKB_with_auto(image_path,device="cuda"):
 
     # generate masks using SAM automatically
     masks = mask_generator.generate(image)
-    plt.figure()
+
     # obtain image segments
     os.makedirs(save_path, exist_ok=True)
     count = 0
     masks = sorted(masks,key=lambda x:np.sum(x['segmentation']),reverse=True)
-    if len(masks) > max_segment_num:# remove too small segments
+    if len(masks) > max_segment_num: # remove too small segments
         masks = masks[:max_segment_num]
     for mask in masks:
+        plt.figure()
         show_interesting_object(mask['segmentation'], image, plt.gca())
         plt.axis('off')
         os.makedirs(seg_dir, exist_ok=True)
@@ -115,11 +116,12 @@ def SKB_with_auto(image_path,device="cuda"):
         print(seg_save_path)
         plt.savefig(seg_save_path, bbox_inches='tight', pad_inches=0)
         count += 1
-        # plt.show()
+        plt.close()
 
 if __name__ == '__main__':
     device = "cpu"
-    image_path = "data/raw_images"
+    dataset="example"
+    image_path = f"data/raw_images/{dataset}"
     for img in os.listdir(image_path):
         img_path = os.path.join(image_path,img)
-        SKB_with_auto(img_path,device)
+        SKB_with_auto(img_path,device,dataset)

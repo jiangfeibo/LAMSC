@@ -23,6 +23,11 @@ Semantic communication (SC) is an emerging intelligent paradigm, offering soluti
 
 - [SC_with_ASC.py](SC_with_ASC.py): The implementation of the image SC and ASC modules, including the training of the SC model and the mask network.
 
+## Pre-training weights
+Download link: https://pan.baidu.com/s/1szj5KoXJBdM6C9b37beufg
+Code: ierv
+
+Download these weights to 'checkpoints/'.
 ## Citation   
 ```
 @article{jiang2023large,

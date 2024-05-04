@@ -18,7 +18,7 @@ imagenet_std = np.array([0.229, 0.224, 0.225])
 class params():
     checkpoint_path = "checkpoints" # path to save model weights
     device = "cuda"
-    dataset = "data/segments" # path to training data
+    dataset = "data/segments/example" # path to training data
     log_path = "logs" # path to save logs
     epoch = 100 # training epochs
     lr = 1e-4 # learning rate
@@ -100,7 +100,7 @@ def Train_AttentionNet(data_path):
     # load model
     model = AttentionNet(in_dims=arg.segment_num*3)# the input dimension is the number of segments*3
     model.to(arg.device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=arg.lr,weight_decay=1e-5)
+    optimizer = torch.optim.Adam(model.parameters(), lr=arg.lr,weight_decay=1e-6)
     mse = nn.MSELoss()
     model.train()
     # model training
@@ -126,11 +126,11 @@ def Train_AttentionNet(data_path):
 
 # generate semantic-aware images based on the attention network
 @torch.no_grad()
-def semantic_aware_images_generation(data_path):
+def semantic_aware_images_generation(data_path,dataset="example"):
     datasets = test_datasets(data_path)
     dataloader = DataLoader(dataset=datasets, batch_size=1, shuffle=False, num_workers=0,
                                   drop_last=False)
-    save_dir = "data/semantic-aware_images"
+    save_dir = f"data/semantic-aware_images/{dataset}"
     os.makedirs(save_dir,exist_ok=True)
     model = AttentionNet(arg.segment_num * 3)
     # load weights
@@ -142,7 +142,7 @@ def semantic_aware_images_generation(data_path):
         x = x.to(arg.device)
         y_ = model(x)
         y_ = torch.squeeze(y_)
-        select_img_indexes = torch.argwhere(y_ > 0.6).squeeze().cpu().tolist()
+        select_img_indexes = torch.argwhere(y_ > 0.7).squeeze().cpu().tolist()
         if isinstance(select_img_indexes, int): # if the number of selected segments is 1
             select_imgs = y[select_img_indexes][0]
             semantic_aware_image = Image.open(select_imgs).convert('RGB')
@@ -150,6 +150,8 @@ def semantic_aware_images_generation(data_path):
             semantic_aware_image.save(save_path)
         else: # if the number of selected segments > 1
             select_imgs = [img_path[0] for i, img_path in enumerate(y) if i in select_img_indexes]
+            if select_imgs == []:
+                continue
             semantic_aware_image = Image.open(select_imgs[0]).convert('RGB')
             semantic_aware_image = np.array(semantic_aware_image)
             for i in range(1,len(select_imgs)):
