@@ -32,7 +32,7 @@ Semantic communication (SC) is an emerging intelligent paradigm, offering soluti
 - [data/rec_images](data/rec_images): Path to save the reconstructed image corresponding to the semantic-aware image. SC_with_ASC.py generates these reconstructed images are generated.
 
 - [data_test](data_test): Path to save the test images we provided.
-- 
+
 - [logs](logs): Path to save the logs during training.
 
 ## Pre-training weights
