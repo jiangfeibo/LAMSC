@@ -44,11 +44,14 @@ Code: ierv
 Download these weights to 'checkpoints/'.
 ## Citation   
 ```
-@article{jiang2023large,
-  title={Large AI model-based semantic communications},
+@ARTICLE{10558819,
   author={Jiang, Feibo and Peng, Yubo and Dong, Li and Wang, Kezhi and Yang, Kun and Pan, Cunhua and You, Xiaohu},
-  journal={arXiv preprint arXiv:2307.03492},
-  year={2023}
-}
+  journal={IEEE Wireless Communications}, 
+  title={Large AI Model-Based Semantic Communications}, 
+  year={2024},
+  volume={31},
+  number={3},
+  pages={68-75},
+  doi={10.1109/MWC.001.2300346}}
 ```
 
